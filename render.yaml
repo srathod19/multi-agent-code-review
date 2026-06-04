@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: code-review-agents-api
+    env: docker                          # Use Docker instead of native Python
+    dockerfilePath: ./backend/Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false                      # Set manually in Render dashboard
+      - key: GITHUB_TOKEN
+        sync: false
+    autoDeploy: true                     # Auto-deploy on git push (OR use deploy hook)
