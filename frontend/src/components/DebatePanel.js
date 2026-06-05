@@ -1,36 +1,22 @@
 import React, { useState } from 'react';
 
 const SEVERITY_COLORS = {
-  critical: '#ef4444',
-  high: '#f97316',
-  medium: '#f59e0b',
-  low: '#22c55e',
-  info: '#6366f1',
+  critical: '#ef4444', high: '#f97316', medium: '#f59e0b', low: '#22c55e', info: '#6366f1',
 };
 
 function ConflictCard({ conflict }) {
   return (
     <div style={{
-      background: 'rgba(245,158,11,0.08)',
-      border: '1px solid rgba(245,158,11,0.3)',
-      borderRadius: 10,
-      padding: '14px 16px',
-      marginBottom: 10,
+      background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)',
+      borderRadius: 10, padding: '14px 16px', marginBottom: 10,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 14 }}>⚔️</span>
         <span style={{ color: '#fcd34d', fontSize: 12, fontWeight: 700 }}>CONFLICT {conflict.id}</span>
-        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>
-          {conflict.agents_involved?.join(' vs ')}
-        </span>
+        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>{conflict.agents_involved?.join(' vs ')}</span>
       </div>
-      <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginBottom: 8 }}>
-        {conflict.description}
-      </div>
-      <div style={{
-        background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.2)',
-        borderRadius: 6, padding: '8px 10px'
-      }}>
+      <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, marginBottom: 8 }}>{conflict.description}</div>
+      <div style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.2)', borderRadius: 6, padding: '8px 10px' }}>
         <span style={{ color: '#67e8f9', fontSize: 11, fontWeight: 600 }}>Resolution: </span>
         <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>{conflict.resolution}</span>
       </div>
@@ -45,6 +31,8 @@ function ConflictCard({ conflict }) {
 
 export function DebatePanel({ debate, allReviews }) {
   const [activeTab, setActiveTab] = useState('summary');
+  const [codeCopied, setCodeCopied] = useState(false);
+
   if (!debate || !debate.final_summary) return null;
 
   const verdict = debate.overall_verdict;
@@ -55,24 +43,24 @@ export function DebatePanel({ debate, allReviews }) {
   };
   const vc = verdictConfig[verdict] || verdictConfig.comment;
 
-  const tabs = ['summary', 'priorities', 'conflicts'];
+  const tabs = ['summary', 'fixed_code', 'priorities', 'conflicts'];
+  const tabLabels = { summary: '📋 Summary', fixed_code: '✅ Fixed Code', priorities: '🎯 Priorities', conflicts: '⚔️ Conflicts' };
 
-  // Collect all issues from all agents for priority mapping
   const allIssues = {};
   ['security', 'performance', 'style'].forEach(key => {
-    const rev = allReviews?.[key];
-    if (rev?.issues) {
-      rev.issues.forEach(issue => { allIssues[issue.id] = issue; });
-    }
+    allReviews?.[key]?.issues?.forEach(issue => { allIssues[issue.id] = issue; });
   });
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(debate.fully_fixed_code);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
+  };
 
   return (
     <div style={{
-      background: 'rgba(6,182,212,0.05)',
-      border: '1px solid rgba(6,182,212,0.25)',
-      borderRadius: 16,
-      padding: '24px 26px',
-      marginTop: 24,
+      background: 'rgba(6,182,212,0.05)', border: '1px solid rgba(6,182,212,0.25)',
+      borderRadius: 16, padding: '24px 26px', marginTop: 24,
       boxShadow: '0 0 40px rgba(6,182,212,0.1)',
     }}>
       {/* Header */}
@@ -81,14 +69,10 @@ export function DebatePanel({ debate, allReviews }) {
           <span style={{ fontSize: 24 }}>⚖️</span>
           <div>
             <div style={{ color: '#67e8f9', fontWeight: 700, fontSize: 16 }}>Final Verdict</div>
-            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>Debate Moderator Consolidated Review</div>
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>Debate Moderator — Consolidated Review</div>
           </div>
         </div>
-        <div style={{
-          background: vc.bg, border: `1px solid ${vc.border}`,
-          borderRadius: 10, padding: '10px 18px',
-          display: 'flex', alignItems: 'center', gap: 8
-        }}>
+        <div style={{ background: vc.bg, border: `1px solid ${vc.border}`, borderRadius: 10, padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ color: vc.color, fontSize: 22, fontWeight: 700 }}>{vc.icon}</span>
           <div>
             <div style={{ color: vc.color, fontWeight: 700, fontSize: 13 }}>{vc.label}</div>
@@ -98,22 +82,21 @@ export function DebatePanel({ debate, allReviews }) {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 0 }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         {tabs.map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{
             background: activeTab === tab ? 'rgba(6,182,212,0.15)' : 'transparent',
             border: 'none',
             borderBottom: activeTab === tab ? '2px solid #06b6d4' : '2px solid transparent',
             color: activeTab === tab ? '#67e8f9' : 'rgba(255,255,255,0.4)',
-            padding: '8px 16px',
-            cursor: 'pointer',
-            fontSize: 12,
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: 0.8,
-            transition: 'all 0.2s',
+            padding: '8px 14px', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+            textTransform: 'uppercase', letterSpacing: 0.8, transition: 'all 0.2s',
+            fontFamily: 'inherit',
           }}>
-            {tab === 'summary' ? '📋 Summary' : tab === 'priorities' ? '🎯 Priorities' : '⚔️ Conflicts'}
+            {tabLabels[tab]}
+            {tab === 'fixed_code' && debate.fully_fixed_code && (
+              <span style={{ marginLeft: 6, background: '#22c55e', color: '#000', fontSize: 9, padding: '1px 5px', borderRadius: 10, fontWeight: 700 }}>NEW</span>
+            )}
           </button>
         ))}
       </div>
@@ -131,10 +114,7 @@ export function DebatePanel({ debate, allReviews }) {
               </div>
               {debate.must_fix_before_merge?.length > 0 ? (
                 debate.must_fix_before_merge.map(id => (
-                  <div key={id} style={{
-                    background: 'rgba(239,68,68,0.1)', borderRadius: 5, padding: '5px 10px',
-                    marginBottom: 6, color: '#fca5a5', fontSize: 12, fontFamily: 'monospace'
-                  }}>
+                  <div key={id} style={{ background: 'rgba(239,68,68,0.1)', borderRadius: 5, padding: '5px 10px', marginBottom: 6, color: '#fca5a5', fontSize: 12, fontFamily: 'monospace' }}>
                     {id} — {allIssues[id]?.title || 'See agent review'}
                   </div>
                 ))
@@ -148,10 +128,7 @@ export function DebatePanel({ debate, allReviews }) {
               </div>
               {debate.nice_to_have?.length > 0 ? (
                 debate.nice_to_have.map(id => (
-                  <div key={id} style={{
-                    background: 'rgba(34,197,94,0.1)', borderRadius: 5, padding: '5px 10px',
-                    marginBottom: 6, color: '#86efac', fontSize: 12, fontFamily: 'monospace'
-                  }}>
+                  <div key={id} style={{ background: 'rgba(34,197,94,0.1)', borderRadius: 5, padding: '5px 10px', marginBottom: 6, color: '#86efac', fontSize: 12, fontFamily: 'monospace' }}>
                     {id} — {allIssues[id]?.title || 'See agent review'}
                   </div>
                 ))
@@ -160,6 +137,65 @@ export function DebatePanel({ debate, allReviews }) {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Fixed Code Tab */}
+      {activeTab === 'fixed_code' && (
+        <div>
+          {debate.fully_fixed_code ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div>
+                  <div style={{ color: '#22c55e', fontWeight: 700, fontSize: 14 }}>✅ Production-Ready Fixed Code</div>
+                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 2 }}>
+                    All security fixes, optimizations, and style improvements applied
+                  </div>
+                </div>
+                <button onClick={handleCopyCode} style={{
+                  background: codeCopied ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.07)',
+                  border: `1px solid ${codeCopied ? 'rgba(34,197,94,0.4)' : 'rgba(255,255,255,0.12)'}`,
+                  color: codeCopied ? '#86efac' : 'rgba(255,255,255,0.6)',
+                  padding: '8px 16px', borderRadius: 8, cursor: 'pointer',
+                  fontSize: 12, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.2s'
+                }}>
+                  {codeCopied ? '✓ Copied!' : '📋 Copy Code'}
+                </button>
+              </div>
+
+              {/* Changes made */}
+              {debate.fix_summary?.length > 0 && (
+                <div style={{ background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: 10, padding: '14px 16px', marginBottom: 14 }}>
+                  <div style={{ color: '#86efac', fontWeight: 700, fontSize: 12, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                    Changes Applied ({debate.fix_summary.length})
+                  </div>
+                  {debate.fix_summary.map((change, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+                      <span style={{ color: '#22c55e', fontSize: 12, flexShrink: 0 }}>✓</span>
+                      <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>{change}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <pre style={{
+                background: '#060912', border: '1px solid rgba(34,197,94,0.2)',
+                borderLeft: '3px solid #22c55e',
+                borderRadius: 8, padding: '16px 18px', margin: 0,
+                color: '#e2e8f0', fontSize: 12,
+                fontFamily: "'JetBrains Mono', monospace",
+                lineHeight: 1.7, overflowX: 'auto',
+                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                maxHeight: 500, overflowY: 'auto',
+              }}>
+                {debate.fully_fixed_code}
+              </pre>
+            </>
+          ) : (
+            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, padding: '20px 0' }}>
+              No fixed code generated. This may happen if no issues were found.
+            </div>
+          )}
         </div>
       )}
 
@@ -178,17 +214,11 @@ export function DebatePanel({ debate, allReviews }) {
                   border: '1px solid rgba(6,182,212,0.3)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   color: '#67e8f9', fontWeight: 700, fontSize: 12, flexShrink: 0
-                }}>
-                  {p.priority_rank}
-                </div>
+                }}>{p.priority_rank}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <span style={{ color: '#f1f5f9', fontWeight: 600, fontSize: 13 }}>{p.title}</span>
-                    <span style={{
-                      background: SEVERITY_COLORS[p.severity] + '33',
-                      color: SEVERITY_COLORS[p.severity],
-                      fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 700
-                    }}>
+                    <span style={{ background: SEVERITY_COLORS[p.severity] + '33', color: SEVERITY_COLORS[p.severity], fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>
                       {p.severity?.toUpperCase()}
                     </span>
                     <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11 }}>{p.agent}</span>
@@ -207,14 +237,9 @@ export function DebatePanel({ debate, allReviews }) {
       {activeTab === 'conflicts' && (
         <div>
           {debate.conflicts?.length > 0 ? (
-            debate.conflicts.map(conflict => (
-              <ConflictCard key={conflict.id} conflict={conflict} />
-            ))
+            debate.conflicts.map(conflict => <ConflictCard key={conflict.id} conflict={conflict} />)
           ) : (
-            <div style={{
-              color: '#22c55e', fontSize: 13, padding: '20px 0',
-              display: 'flex', alignItems: 'center', gap: 8
-            }}>
+            <div style={{ color: '#22c55e', fontSize: 13, padding: '20px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
               ✓ No conflicts between agents — all reviews aligned.
             </div>
           )}
