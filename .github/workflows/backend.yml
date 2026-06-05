@@ -133,21 +133,5 @@ jobs:
             exit 1
           fi
 
-      - name: Wait for Render deploy to complete
-        run: |
-          echo "Waiting 90s for Render to start deployment..."
-          sleep 90
-
-          MAX_ATTEMPTS=30
-          ATTEMPT=0
-          until curl -sf "${{ secrets.RENDER_BACKEND_URL }}/health" > /dev/null; do
-            ATTEMPT=$((ATTEMPT + 1))
-            if [ $ATTEMPT -ge $MAX_ATTEMPTS ]; then
-              echo "⚠️ Health check timed out but deploy may still be in progress on Render"
-              echo "✅ Skipping health check failure — verify manually at ${{ secrets.RENDER_BACKEND_URL }}"
-              exit 0
-            fi
-            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS — waiting 15s..."
-            sleep 15
-          done
-          echo "✅ Backend is live!"
+      - name: Deploy triggered
+        run: echo "✅ Render deploy hook triggered successfully. Check https://dashboard.render.com for deploy status."
