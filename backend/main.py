@@ -13,7 +13,7 @@ app = FastAPI(title="Multi-Agent Code Review API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, set to your frontend URL
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,46 +38,45 @@ async def health():
 
 @app.post("/review/stream")
 async def review_stream(request: ReviewRequest):
-    """
-    Stream code review events via Server-Sent Events (SSE).
-    Each agent emits events as it works, then the debate agent consolidates.
-    """
     if not request.code and not request.github_pr_url:
-        raise HTTPException(status_code=400, detail="Provide either 'code' or 'github_pr_url'")
+        raise HTTPException(
+            status_code=400, detail="Provide either 'code' or 'github_pr_url'"
+        )
 
     async def event_generator():
         code = request.code
         language = request.language or "Python"
 
-        # Fetch GitHub PR diff if URL provided
         if request.github_pr_url:
             yield {
                 "event": "message",
-                "data": json.dumps({
-                    "type": "fetch_start",
-                    "message": f"Fetching PR diff from GitHub..."
-                })
+                "data": json.dumps(
+                    {
+                        "type": "fetch_start",
+                        "message": "Fetching PR diff from GitHub...",  # ← removed f prefix
+                    }
+                ),
             }
             try:
                 code, language = await fetch_pr_diff(request.github_pr_url)
                 yield {
                     "event": "message",
-                    "data": json.dumps({
-                        "type": "fetch_done",
-                        "message": f"PR fetched. Detected language: {language}. Starting review..."
-                    })
+                    "data": json.dumps(
+                        {
+                            "type": "fetch_done",
+                            "message": f"PR fetched. Detected language: {language}. Starting review...",
+                        }
+                    ),
                 }
             except Exception as e:
                 yield {
                     "event": "message",
-                    "data": json.dumps({
-                        "type": "error",
-                        "message": f"Failed to fetch PR: {str(e)}"
-                    })
+                    "data": json.dumps(
+                        {"type": "error", "message": f"Failed to fetch PR: {str(e)}"}
+                    ),
                 }
                 return
 
-        # Initial state
         initial_state: ReviewState = {
             "code": code,
             "language": language,
@@ -86,90 +85,53 @@ async def review_stream(request: ReviewRequest):
             "style_review": {},
             "debate_result": {},
             "events": [],
-            "error": ""
+            "error": "",
         }
 
-        # Stream events as the graph runs
-        seen_events = 0
-        
-        # Run graph in a thread to avoid blocking
-        result = None
-        graph_task = asyncio.create_task(
-            asyncio.to_thread(review_graph.invoke, initial_state)
-        )
-        
-        # Poll for new events while graph runs
-        current_state = initial_state.copy()
-        
-        # Since LangGraph doesn't natively stream state changes to us here,
-        # we run it synchronously in a thread and emit events from the final result.
-        # For true per-step streaming, we use the streaming approach below.
-        
         try:
-            # Use LangGraph's stream method for step-by-step events
-            loop = asyncio.get_event_loop()
-            
-            def run_graph_stream():
-                events_to_emit = []
-                for chunk in review_graph.stream(initial_state):
-                    for node_name, node_output in chunk.items():
-                        node_events = node_output.get("events", [])
-                        # Get only new events
-                        new_events = node_events[seen_events:]
-                        events_to_emit.extend(new_events)
-                return events_to_emit, chunk
-            
-            # Stream via synchronous LangGraph stream in thread pool
-            all_chunks = []
+            emitted_event_count = 0
             final_state = initial_state.copy()
-            
-            # Collect all stream outputs
+
             def collect_stream():
                 collected = []
                 for chunk in review_graph.stream(initial_state):
                     collected.append(chunk)
                 return collected
-            
+
             chunks = await asyncio.to_thread(collect_stream)
-            
-            # Reconstruct state and emit events
-            emitted_event_count = 0
-            
+
             for chunk in chunks:
                 for node_name, node_output in chunk.items():
                     final_state.update(node_output)
-                    
+
                     all_events = node_output.get("events", [])
                     new_events = all_events[emitted_event_count:]
                     emitted_event_count = len(all_events)
-                    
+
                     for event in new_events:
-                        yield {
-                            "event": "message",
-                            "data": json.dumps(event)
-                        }
-                        await asyncio.sleep(0.05)  # Small delay for UI to render
-            
-            # Emit the final complete result
+                        yield {"event": "message", "data": json.dumps(event)}
+                        await asyncio.sleep(0.05)
+
             yield {
                 "event": "message",
-                "data": json.dumps({
-                    "type": "final_result",
-                    "security": final_state.get("security_review", {}),
-                    "performance": final_state.get("performance_review", {}),
-                    "style": final_state.get("style_review", {}),
-                    "debate": final_state.get("debate_result", {}),
-                    "language": language
-                })
+                "data": json.dumps(
+                    {
+                        "type": "final_result",
+                        "security": final_state.get("security_review", {}),
+                        "performance": final_state.get("performance_review", {}),
+                        "style": final_state.get("style_review", {}),
+                        "debate": final_state.get("debate_result", {}),
+                        "language": language,
+                    }
+                ),
             }
-            
+
         except Exception as e:
             yield {
                 "event": "message",
-                "data": json.dumps({
-                    "type": "error",
-                    "message": f"Review pipeline failed: {str(e)}"
-                })
+                "data": json.dumps(
+                    {"type": "error", "message": f"Review pipeline failed: {str(e)}"}
+                ),
             }
 
     return EventSourceResponse(event_generator())
@@ -182,6 +144,6 @@ async def root():
         "version": "1.0.0",
         "endpoints": {
             "POST /review/stream": "Stream a code review via SSE",
-            "GET /health": "Health check"
-        }
+            "GET /health": "Health check",
+        },
     }
