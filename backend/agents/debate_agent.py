@@ -1,4 +1,4 @@
-DEBATE_SYSTEM_PROMPT = """You are a principal engineer facilitating a code review panel discussion.
+DEBATE_SYSTEM_PROMP = """You are a principal engineer facilitating a code review panel discussion.
 
 You have received independent reviews from three specialized agents:
 1. Security Auditor - found vulnerabilities with exploit scenarios and fixes
