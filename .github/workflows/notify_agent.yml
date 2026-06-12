@@ -13,48 +13,64 @@ jobs:
       - name: Fetch logs and notify agent
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const run_id = context.payload.workflow_run.id;
-            
-            // Fetch jobs for this run
-            const jobs = await github.rest.actions.listJobsForWorkflowRun({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id,
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Fetch all jobs for this run
+            const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
+              owner, repo, run_id
             });
-            
-            // Extract log text from job steps
-            let logText = "";
-            for (const job of jobs.data.jobs) {
-              logText += `\nJob: ${job.name} — ${job.conclusion}\n`;
+
+            // Build a detailed log string from steps
+            let logText = `Workflow: ${context.payload.workflow_run.name}\n`;
+            logText += `Branch: ${context.payload.workflow_run.head_branch}\n`;
+            logText += `Commit: ${context.payload.workflow_run.head_sha}\n\n`;
+
+            for (const job of jobsResp.data.jobs) {
+              logText += `JOB: ${job.name} — ${job.conclusion}\n`;
               for (const step of job.steps || []) {
-                logText += `  Step: ${step.name} — ${step.conclusion}\n`;
+                logText += `  STEP: ${step.name} — ${step.conclusion}\n`;
+                if (step.conclusion === 'failure') {
+                  logText += `  ^^^ THIS STEP FAILED\n`;
+                }
               }
             }
-            
-            // Try to get full logs
+
+            // Try to download actual log content
             try {
               const logsResp = await github.rest.actions.downloadWorkflowRunLogs({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                run_id,
+                owner, repo, run_id
               });
-              logText += `\nLog URL: ${logsResp.url}`;
-            } catch(e) {}
-            
+              // logsResp.url is a zip download — include it for reference
+              logText += `\nFull logs zip: ${logsResp.url}\n`;
+            } catch(e) {
+              logText += `\nCould not fetch log zip: ${e.message}\n`;
+            }
+
+            // Also include the head commit message as a hint
+            logText += `\nCommit message: ${context.payload.workflow_run.head_commit?.message || 'N/A'}\n`;
+
+            console.log("Sending logs to agent:\n" + logText.substring(0, 500));
+
             const payload = {
               ...context.payload,
               raw_logs: logText
             };
-            
-            await fetch("${{ secrets.AGENT_WEBHOOK_URL }}/webhook/github", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "X-GitHub-Event": "workflow_run"
-              },
-              body: JSON.stringify(payload)
-            });
 
-
-
+            const response = await fetch(
+              `${process.env.AGENT_WEBHOOK_URL}/webhook/github`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-GitHub-Event": "workflow_run"
+                },
+                body: JSON.stringify(payload)
+              }
+            );
+            console.log("Agent response status:", response.status);
+        env:
+          AGENT_WEBHOOK_URL: ${{ secrets.AGENT_WEBHOOK_URL }}
