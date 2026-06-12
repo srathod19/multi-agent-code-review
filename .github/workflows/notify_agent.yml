@@ -10,7 +10,12 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'failure' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch annotations and notify agent
+      - name: Checkout monitored repo at failed commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Get failed job logs and notify agent
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -21,53 +26,71 @@ jobs:
 
             let logText = `Workflow: ${context.payload.workflow_run.name}\n`;
             logText += `Branch: ${context.payload.workflow_run.head_branch}\n`;
-            logText += `Commit message: ${context.payload.workflow_run.head_commit?.message || 'N/A'}\n\n`;
+            logText += `Commit: ${context.payload.workflow_run.head_commit?.message || 'N/A'}\n\n`;
 
-            // Fetch jobs and steps
+            // Get all jobs
             const jobsResp = await github.rest.actions.listJobsForWorkflowRun({
-              owner, repo, run_id
+              owner, repo, run_id, filter: 'latest'
             });
 
             for (const job of jobsResp.data.jobs) {
-              logText += `JOB: ${job.name} — ${job.conclusion}\n`;
+              logText += `\nJOB: ${job.name} [${job.conclusion}]\n`;
               for (const step of job.steps || []) {
-                logText += `  STEP [${step.conclusion}]: ${step.name}\n`;
+                logText += `  STEP [${step.conclusion ?? 'skipped'}]: ${step.name}\n`;
               }
 
-              // Fetch annotations for failed jobs (contains actual error messages)
+              // Get per-job logs directly
               if (job.conclusion === 'failure') {
                 try {
-                  const annotations = await github.rest.checks.listAnnotations({
+                  const jobLog = await github.rest.actions.downloadJobLogsForWorkflowRun({
                     owner, repo,
-                    check_run_id: job.id
+                    job_id: job.id
                   });
-                  for (const ann of annotations.data) {
-                    logText += `\nERROR in ${ann.path} line ${ann.start_line}:\n`;
-                    logText += `  ${ann.message}\n`;
-                    logText += `  Level: ${ann.annotation_level}\n`;
-                  }
+                  // jobLog.data is the raw text log
+                  const logLines = jobLog.data
+                    .split('\n')
+                    .filter(l => l.trim())
+                    .slice(-80)  // last 80 lines
+                    .join('\n');
+                  logText += `\n--- JOB LOG (last 80 lines) ---\n${logLines}\n`;
                 } catch(e) {
-                  logText += `  Could not fetch annotations: ${e.message}\n`;
+                  logText += `  [Could not fetch job log: ${e.message}]\n`;
+
+                  // fallback: try annotations
+                  try {
+                    const ann = await github.rest.checks.listAnnotations({
+                      owner, repo, check_run_id: job.id
+                    });
+                    for (const a of ann.data) {
+                      logText += `\nERROR: ${a.path}:${a.start_line}: ${a.message}\n`;
+                    }
+                  } catch(e2) {
+                    logText += `  [Could not fetch annotations: ${e2.message}]\n`;
+                  }
                 }
               }
             }
 
-            logText += `\nRepo: ${owner}/${repo}\n`;
-            console.log("Sending to agent:\n" + logText.substring(0, 800));
+            console.log("=== FULL LOG BEING SENT ===");
+            console.log(logText);
+            console.log("=== END LOG ===");
 
-            const payload = { ...context.payload, raw_logs: logText };
+            const payload = {
+              ...context.payload,
+              raw_logs: logText
+            };
 
-            const response = await fetch(
+            const resp = await fetch(
               `${process.env.AGENT_WEBHOOK_URL}/webhook/github`,
               {
-                method: "POST",
+                method: 'POST',
                 headers: {
-                  "Content-Type": "application/json",
-                  "X-GitHub-Event": "workflow_run"
+                  'Content-Type': 'application/json',
+                  'X-GitHub-Event': 'workflow_run'
                 },
                 body: JSON.stringify(payload)
               }
             );
-            console.log("Agent response:", response.status);
+            console.log("Agent response status:", resp.status);
         env:
           AGENT_WEBHOOK_URL: ${{ secrets.AGENT_WEBHOOK_URL }}
