@@ -1,4 +1,4 @@
-import ]]]]]
+import ]]]]]]
 DEBATE_SYSTEM_PROMPT = """You are a principal engineer facilitating a code review panel discussion.
 
 You have received independent reviews from three specialized agents:
